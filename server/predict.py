@@ -60,3 +60,17 @@ def predict_risk(clause_text, model, tokenizer, device):
         'class_name': 'Risk' if predicted_class.item() == 1 else 'No Risk',
         'confidence': probabilities[0][predicted_class.item()].item()
     }
+
+
+def get_risk_prediction(clause_text):
+    """
+    Accepts a text clause and returns the class name and probability.
+        
+    Args:
+        clause_text (str): The legal clause text
+        
+        Returns:
+            tuple: Class name and confidence probability
+    """
+    result = predict_risk(clause_text, model, tokenizer, device)
+    return result['class_name'], result['confidence']
