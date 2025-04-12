@@ -88,7 +88,7 @@ print(f"Validation samples: {val_size}")
 print(f"Testing samples: {test_size}")
 
 # Create data loaders
-batch_size = 16  # Increased batch size
+batch_size = 16
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=batch_size)
 test_loader = DataLoader(test_dataset, batch_size=batch_size)
@@ -109,11 +109,12 @@ model.to(device)
 class_weights = class_weights.to(device)
 
 # Set up the optimizer with better learning rate
-optimizer = torch.optim.AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)
+optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5, weight_decay=0.01)  # Reduced learning rate for stability
 
 # Create learning rate scheduler
 # Calculate total training steps
-total_steps = len(train_loader) * 5  # epochs
+epochs = 50  # Defined here for clarity
+total_steps = len(train_loader) * epochs
 warmup_steps = int(0.1 * total_steps)  # 10% of total steps for warmup
 
 scheduler = get_linear_schedule_with_warmup(
@@ -144,14 +145,15 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, loss_fn):
         # Forward pass
         outputs = model(
             input_ids=input_ids,
-            attention_mask=attention_mask
+            attention_mask=attention_mask,
+            labels=labels  # Added labels to get loss directly from the model
         )
         
-        logits = outputs.logits
-        loss = loss_fn(logits, labels)  # Using the weighted loss function
+        loss = outputs.loss
         total_loss += loss.item()
         
         # Get predictions
+        logits = outputs.logits
         _, preds = torch.max(logits, dim=1)
         all_preds.extend(preds.cpu().tolist())
         all_labels.extend(labels.cpu().tolist())
@@ -197,13 +199,12 @@ def evaluate(model, dataloader, device, loss_fn=None):
             # Forward pass
             outputs = model(
                 input_ids=input_ids,
-                attention_mask=attention_mask
+                attention_mask=attention_mask,
+                labels=labels  # Added labels to get loss directly
             )
             
-            # Calculate loss if loss function is provided
-            if loss_fn is not None:
-                loss = loss_fn(outputs.logits, labels)
-                total_loss += loss.item()
+            loss = outputs.loss
+            total_loss += loss.item()
             
             # Get predictions
             logits = outputs.logits
@@ -227,39 +228,51 @@ def evaluate(model, dataloader, device, loss_fn=None):
         'precision': precision,
         'recall': recall,
         'f1': f1,
-        'confusion_matrix': cm
+        'confusion_matrix': cm,
+        'loss': total_loss / len(dataloader)
     }
-    
-    if loss_fn is not None:
-        results['loss'] = total_loss / len(dataloader)
     
     return results
 
-# Early stopping implementation
+# Improved Early stopping implementation
 class EarlyStopping:
-    def __init__(self, patience=3, min_delta=0.001):
+    def __init__(self, patience=5, min_delta=0.0, monitor='loss', mode='min'):
         self.patience = patience
         self.min_delta = min_delta
+        self.monitor = monitor
+        self.mode = mode  # 'min' for loss, 'max' for metrics like accuracy
         self.counter = 0
         self.best_score = None
         self.early_stop = False
+        self.best_model_state = None
     
-    def __call__(self, val_f1):
+    def __call__(self, score, model=None):
         if self.best_score is None:
-            self.best_score = val_f1
-        elif val_f1 < self.best_score - self.min_delta:
+            self.best_score = score
+            if model is not None:
+                self.best_model_state = model.state_dict().copy()
+        elif (self.mode == 'min' and score > self.best_score - self.min_delta) or \
+             (self.mode == 'max' and score < self.best_score + self.min_delta):
             self.counter += 1
+            print(f"EarlyStopping counter: {self.counter} out of {self.patience}")
             if self.counter >= self.patience:
                 self.early_stop = True
         else:
-            self.best_score = val_f1
+            if ((self.mode == 'min' and score < self.best_score) or 
+                (self.mode == 'max' and score > self.best_score)):
+                self.best_score = score
+                if model is not None:
+                    self.best_model_state = model.state_dict().copy()
             self.counter = 0
 
 # Training loop with validation
-epochs = 5  # Increased from 3 to 5
-early_stopping = EarlyStopping(patience=2)
+epochs = 50  # Set a reasonable number of epochs
+early_stopping = EarlyStopping(patience=5, min_delta=0.0, monitor='accuracy', mode='max')  # More patient early stopping
 train_metrics_history = []
 val_metrics_history = []
+
+best_val_accuracy = 0
+best_model_state = None
 
 for epoch in range(epochs):
     print(f"\nEpoch {epoch+1}/{epochs}")
@@ -273,18 +286,29 @@ for epoch in range(epochs):
           f"F1: {train_metrics['f1']:.4f}")
     
     # Validate
-    val_metrics = evaluate(model, val_loader, device, loss_fn)
+    val_metrics = evaluate(model, val_loader, device)
     val_metrics_history.append(val_metrics)
     
     print(f"Validation - Loss: {val_metrics['loss']:.4f}, Acc: {val_metrics['accuracy']:.4f}, "
           f"Prec: {val_metrics['precision']:.4f}, Recall: {val_metrics['recall']:.4f}, "
           f"F1: {val_metrics['f1']:.4f}")
     
+    # Save the best model based on validation accuracy
+    if val_metrics['accuracy'] > best_val_accuracy:
+        best_val_accuracy = val_metrics['accuracy']
+        best_model_state = model.state_dict().copy()
+        print(f"New best model saved with validation accuracy: {best_val_accuracy:.4f}")
+    
     # Check if early stopping criteria is met
-    early_stopping(val_metrics['f1'])
+    early_stopping(val_metrics['accuracy'], model)
     if early_stopping.early_stop:
         print("Early stopping triggered!")
         break
+
+# Load the best model for final evaluation
+if best_model_state is not None:
+    model.load_state_dict(best_model_state)
+    print(f"Loaded best model with validation accuracy: {best_val_accuracy:.4f}")
 
 # Final evaluation on test set
 print("\nFinal Evaluation on Test Set:")
@@ -334,9 +358,9 @@ plt.title('Training and Validation Precision')
 plt.legend()
 
 plt.subplot(2, 2, 4)
-plt.plot(epochs_range, [m['recall'] for m in train_metrics_history], 'b-', label='Training Recall')
-plt.plot(epochs_range, [m['recall'] for m in val_metrics_history], 'r-', label='Validation Recall')
-plt.title('Training and Validation Recall')
+plt.plot(epochs_range, [m['f1'] for m in train_metrics_history], 'b-', label='Training F1')
+plt.plot(epochs_range, [m['f1'] for m in val_metrics_history], 'r-', label='Validation F1')
+plt.title('Training and Validation F1 Score')
 plt.legend()
 
 plt.tight_layout()
