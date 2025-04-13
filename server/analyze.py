@@ -15,8 +15,8 @@ def analyze_pdf_risk(url: str):
         prediction = get_risk_prediction(clause)
         results.append({
             "clause": clause,
-            "risk_category": prediction["class_name"],
-            "risk_probability": round(prediction["confidence"], 2)
+            "risk_category": prediction[0],
+            "risk_probability": round(prediction[1], 2)
         })
 
     return results
