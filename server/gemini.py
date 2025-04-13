@@ -3,10 +3,10 @@ load_dotenv()
 import os
 from google import genai
 from google.genai import types
-import pandas as pd
+import pandas as pd 
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
-def generate(input: str):
+def get_risk_catagory(input: str):
     client = genai.Client(
         api_key=os.environ.get("GEMINI_API_KEY"),
     )
@@ -25,31 +25,24 @@ def generate(input: str):
     )
     return response.text
 
-# Load the dataset
-df = pd.read_csv('dataset.csv')
+def analyzeGemini():
+    df = pd.read_csv('dataset.csv')
+    predictions = []
+    actuals = df['risk'].tolist()
 
+    i = 0
+    for clause in df['clause']:
+        print(i)
+        i += 1
+        predicted_risk = int(get_risk_catagory(clause).strip())
+        predictions.append(predicted_risk)
 
-# Initialize lists to store predictions and actual values
-predictions = []
-actuals = df['risk'].tolist()
+    accuracy = accuracy_score(actuals, predictions)
+    precision = precision_score(actuals, predictions)
+    recall = recall_score(actuals, predictions)
+    f1 = f1_score(actuals, predictions)
 
-# Iterate over each clause and get predictions
-i = 0
-for clause in df['clause']:
-    print(i)
-    i += 1
-    predicted_risk = int(generate(clause).strip())  # Ensure the output is converted to an integer
-    predictions.append(predicted_risk)
-
-# Calculate metrics
-accuracy = accuracy_score(actuals, predictions)
-precision = precision_score(actuals, predictions)
-recall = recall_score(actuals, predictions)
-f1 = f1_score(actuals, predictions)
-
-# Print the results
-print(f"Accuracy: {accuracy:.4f}")
-print(f"Precision: {precision:.4f}")
-print(f"Recall: {recall:.4f}")
-print(f"F1 Score: {f1:.4f}")
-
+    print(f"Accuracy: {accuracy:.4f}")
+    print(f"Precision: {precision:.4f}")
+    print(f"Recall: {recall:.4f}")
+    print(f"F1 Score: {f1:.4f}")
