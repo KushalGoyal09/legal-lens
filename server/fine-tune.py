@@ -15,7 +15,7 @@ if torch.cuda.is_available():
     torch.cuda.manual_seed_all(seed)
 
 # Load the dataset
-df = pd.read_csv('training_dataset.csv')
+df = pd.read_csv('dataset.csv')
 print(f"Dataset shape: {df.shape}")
 print(df.head())
 
