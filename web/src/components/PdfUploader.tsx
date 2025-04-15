@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { FileUpload } from "@/components/ui/file-upload";
 import { Button } from "@/components/ui/button";
-import { generatePresignedUrl, generateReport } from "@/app/analysis/action";
+import { generatePresignedUrl } from "@/app/analysis/action";
+import { generateReport } from "@/app/analysis/generateReport";
 import {
   AlertCircle,
   CheckCircle2,
