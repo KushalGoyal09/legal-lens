@@ -37,8 +37,10 @@ export async function generatePresignedUrl(fileName: string) {
 
 export async function generateReport(s3Uri: string) {
   console.log(`Upload complete for file: ${s3Uri}`);
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
   try {
-    const res = await fetch("http://localhost:5000/api/report", {
+    const res = await fetch(`${apiUrl}api/report`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
