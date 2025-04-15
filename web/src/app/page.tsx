@@ -97,7 +97,7 @@ export default function HomePage() {
                 className="mt-16 w-full max-w-4xl mx-auto border rounded-lg shadow-lg overflow-hidden"
               >
                 <Image
-                  src="/vercel.svg"
+                  src="/image.jpg"
                   alt="Legal Document Analysis Preview"
                   className="w-full h-auto"
                   width={1000}
