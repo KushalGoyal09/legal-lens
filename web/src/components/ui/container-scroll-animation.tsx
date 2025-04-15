@@ -54,6 +54,7 @@ export const ContainerScroll = ({
   );
 };
 
+/* eslint-disable  @typescript-eslint/no-explicit-any */
 export const Header = ({ translate, titleComponent }: any) => {
   return (
     <motion.div
